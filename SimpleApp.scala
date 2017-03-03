@@ -1,13 +1,13 @@
 // ⓒ Copyright IBM Corp. 2017
 
-import org.apache.spark.SparkContext
-import org.apache.spark.SparkContext._
-import org.apache.spark.SparkConf
-import org.apache.hadoop.conf.Configuration
+// import org.apache.spark.SparkContext
+// import org.apache.spark.SparkContext._
+// import org.apache.spark.SparkConf
+// import org.apache.hadoop.conf.Configuration
 
-import org.apache.hadoop.io.LongWritable
-import org.apache.hadoop.io.Text
-import org.apache.hadoop.mapreduce.lib.input.TextInputFormat
+// import org.apache.hadoop.io.LongWritable
+// import org.apache.hadoop.io.Text
+// import org.apache.hadoop.mapreduce.lib.input.TextInputFormat
 import scala.collection.mutable.ListBuffer
 import scala.util.control.Breaks._
 import scala.collection.mutable.Queue
@@ -35,32 +35,6 @@ object SimpleApp {
     get_pos_kmer_tups(kmer_tup._2, l).min(Ordering.by{tup: (Int,String) => tup._2})
   }
 
-
-  // def get_kmerized_minimizers_list(seq: String, k: Int, l: Int){
-  //   val kmers = get_pos_kmer_tups(seq,k)
-  //   var curr_min = "S" * l
-  //   var window_pos = -1
-  //   var res = new ListBuffer[(Int,String)]()
-  //   breakable {for (kmer <- kmers){
-  //     val lmer = kmer._2 takeRight l
-  //     if((curr_min > lmer) || window_pos < 0){
-  //       val pos_min_tup: (Int, String) = get_minimizer_w_pos(kmer, l)
-  //       window_pos = pos_min_tup._1
-  //       curr_min = pos_min_tup._2
-  //        // only include minimizer if it can be extended to a kmer
-  //       var minimizer_pos = window_pos + kmer._1
-  //       if (minimizer_pos > seq.length - k + 1) break
-  //       // append kmer start position instead of minimizer start position
-  //       res += ((minimizer_pos, seq.substring(minimizer_pos, minimizer_pos + k)))
-  //       window_pos -= 1 
-  //     }
-  //     else{
-  //       window_pos -= 1
-  //     }
-  //   } }
-  //   res
-  // }
-
   def get_stranded_kmerized_minimizers_list(seq: String, k: Int, l: Int) = {
     /* simple implemenation of getting minimizers while taking into consideration
     both forward and rc orientation. Not efficient because recomputes minimizers from 
@@ -69,7 +43,7 @@ object SimpleApp {
     val rc_seq  = rc(seq)
     val kmers = get_pos_kmer_tups(seq,k)
     var rc_kmers = get_pos_kmer_tups(rc_seq,k)
-    var res = new ListBuffer[(Int,String, Boolean)]()
+    var res = new ListBuffer[(Int,String)]()
 	
 //	println("----------------- kmers   " + kmers)
 	
@@ -104,14 +78,16 @@ object SimpleApp {
 //		  println("-----------------" + real_min + " , " + prev)
 		  if (real_start_pos - padding_length >= 0 && real_start_pos + padding_length + l -1 <= seq.length-1){
 			// return the minimizer after padding it using either the forward of reverse sequence
-			val min_tup: (Int, String, Boolean) =  
+			val min_tup: (Int, String) =  
 			if (real_min == forward_min) 
 			(real_start_pos - padding_length, 
-			 seq.substring(real_start_pos - padding_length, real_start_pos + padding_length + l), true)
+			 seq.substring(real_start_pos - padding_length, real_start_pos + padding_length + l))
 			else
-			(rc_seq.length - (real_start_pos + l - 1 + padding_length) - 1, 
-			  rc_seq.substring(rc_seq.length - (real_start_pos + l - 1 + padding_length) -1, 
-			  rc_seq.length - (real_start_pos - padding_length)), false)
+			// (rc_seq.length - (real_start_pos + l - 1 + padding_length) - 1, 
+      // rc_seq.substring(rc_seq.length - (real_start_pos + l - 1 + padding_length) -1, 
+      //   rc_seq.length - (real_start_pos - padding_length)))
+      (real_start_pos + l + padding_length - k, 
+			  seq.substring(real_start_pos + l + padding_length - k, real_start_pos + l + padding_length))
 			res += min_tup
 		//	println("-----------------" + "," + i + "," + real_min +"," + padding_length +"," + real_start_pos +"," + min_tup)
 		  } 
@@ -120,7 +96,32 @@ object SimpleApp {
     res
   }
 
+  def get_edge_list(read: String, anchors_array: ListBuffer[(Int,String)], k: Int, l: Int) = {
+      // flatMap array to get edge pairs with orientation property; 
+      // 1) pair v_i, v_{i+1} as edge s = (u,w)
+      val edge_pairs = for (i <- 0 until anchors_array.length-1) yield (anchors_array(i),anchors_array(i+1))
 
+      // 2) determine rep(s) = min(s,s') by extracting substring from start(v_i) to end(v_{i+1}) 
+      // using array indices
+      val edge_strings = for(i <- 0 until edge_pairs.length) yield read.substring(edge_pairs(i)._1._1, edge_pairs(i)._2._1 + k)
+      val edge_rc_strings = for(i <- 0 until edge_pairs.length) yield rc(read.substring(edge_pairs(i)._1._1, edge_pairs(i)._2._1 + k))
+      val edge_rep_strings = edge_strings.zip(edge_rc_strings).map{case (a,b) => List(a,b).min}    
+      
+      // 3) choose polarities of u and w relative to rep(s)
+      val edge_list = for {i <- 0 until edge_rep_strings.length
+          edge_rep = edge_rep_strings(i)
+          left_rep = List(edge_rep.substring(0,k), rc(edge_rep.substring(0,k))).min
+          right_rep = List(edge_rep.substring(edge_rep.length - k, edge_rep.length), 
+          rc(edge_rep.substring(edge_rep.length - k, edge_rep.length))).min
+          edge_tup = 
+              (left_rep, right_rep,
+               (edge_rep.substring(0,k) == left_rep,
+               edge_rep.substring(edge_rep.length - k,edge_rep.length) == right_rep)
+              )
+
+      } yield edge_tup
+      edge_list
+  }
 
   // def map_read_to_anchors_list(seq: String, k: Int, l: Int, juncs: Map)
 
@@ -167,19 +168,19 @@ def map_read_to_anchors_list(seq: String, k: Int, l: Int, juncs_set:Set[String])
 
 
   def main(args: Array[String]) {
-    if (args.length < 3) {
-      println("Usage: [inputfile] [k] [partitionsNum]")
-      exit(1)
-    }
-    val inputFile = args(0)
-    val k = args(1).toInt
-    val partitionsNum = args(2).toInt
+    // if (args.length < 3) {
+    //   println("Usage: [inputfile] [k] [partitionsNum]")
+    //   exit(1)
+    // }
+    // val inputFile = args(0)
+    // val k = args(1).toInt
+    // val partitionsNum = args(2).toInt
 
-    val name = "My Simple App " + partitionsNum  // .concat(num_partitions.toString)
-    val sc = new SparkContext(new SparkConf().setAppName(name))
+    // val name = "My Simple App " + partitionsNum  // .concat(num_partitions.toString)
+    // val sc = new SparkContext(new SparkConf().setAppName(name))
 
-    val conf = new Configuration
-    conf.set("textinputformat.record.delimiter", "@")
+    // val conf = new Configuration
+    // conf.set("textinputformat.record.delimiter", "@")
 
    //  // starting with fastq format, first separate individual entries, then keep only read lines
    //  val readLines = 
@@ -219,6 +220,6 @@ def map_read_to_anchors_list(seq: String, k: Int, l: Int, juncs_set:Set[String])
 
     println("---------" + get_stranded_kmerized_minimizers_list("AACCTTGCTACGTCCAAG", 5, 3))    
 
-    sc.stop()
+    // sc.stop()
   }
 }

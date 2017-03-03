@@ -2,12 +2,12 @@
 // https://www.mapr.com/blog/how-get-started-using-apache-spark-graphx-scala
 
 // *** I'm not sure all of these imports are needed
-import org.apache.spark._
-import org.apache.spark.rdd.RDD
-import org.apache.spark.util.IntParam
-// import classes required for using GraphX
-import org.apache.spark.graphx._
-import org.apache.spark.graphx.util.GraphGenerators
+// import org.apache.spark._
+// import org.apache.spark.rdd.RDD
+// import org.apache.spark.util.IntParam
+// // import classes required for using GraphX
+// import org.apache.spark.graphx._
+// import org.apache.spark.graphx.util.GraphGenerators
 
 
 object SimpleApp {
