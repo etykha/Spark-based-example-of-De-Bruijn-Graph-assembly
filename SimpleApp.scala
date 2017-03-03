@@ -218,7 +218,34 @@ def map_read_to_anchors_list(seq: String, k: Int, l: Int, juncs_set:Set[String])
    //  val jj = junctions_broadcast.value.length
    //  println(s"---------------- junctions in broadcast: $jj")
 
-    println("---------" + get_stranded_kmerized_minimizers_list("AACCTTGCTACGTCCAAG", 5, 3))    
+
+    /////////////////////////////////////////
+    // test cases
+    /////////////////////////////////////////
+
+    var l = 3
+    var k = 5
+    /////////////////////////////////////////
+    // testing getting minimizers alone
+    val read1 =   "AACCTTGCTACGTCCAAG"
+    val a1 = get_stranded_kmerized_minimizers_list(read1, k, l)
+    println("---------" + get_stranded_kmerized_minimizers_list(read1, k, l))  
+
+
+    /////////////////////////////////////////
+    // testing getting edge lists
+    l = 7
+    k = 13
+    // 2 edges pointing forward
+    val read2 = "S"*15 + "ACGTTCACGGTTATTA" + "ATTTTCACAAAAA"
+    val a2 = ListBuffer((15, "ACGTTCACGGTTA"), (18, "TTCACGGTTATTA"), (31, "ATTTTCACAAAAA"))
+    println("---------" + get_edge_list(read2,a2,k,l))  
+
+    // 3 edges F,R,F - should see k-mers on middle edge in reverse order (according to direction we read the edge)
+    val read3 = "S"*15 + "ACGTTCACGGTTATTA" + "AAATCGGTCGTTT" + "ATTTTCACAAAAA"
+    val a3 = ListBuffer((15, "ACGTTCACGGTTA"), (18, "TTCACGGTTATTA"), (31, "AAATCGGTCGTTT"), (44, "ATTTTCACAAAAA"))
+    println("---------" + get_edge_list(read3,a3,k,l))  
+
 
     // sc.stop()
   }
