@@ -12,7 +12,7 @@ import scala.collection.mutable.ListBuffer
 import scala.util.control.Breaks._
 import scala.collection.mutable.Queue
 
-object SimpleApp {
+object SqueezeBox {
   val encoding_map = Map('A'-> 0, 'C'-> 1, 'T'-> 2, 'G'-> 3)  // chosen to make rc(x) == XOR(x)
 
   def rc(dna: String): String = 
