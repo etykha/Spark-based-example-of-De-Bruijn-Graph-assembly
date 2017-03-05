@@ -1,13 +1,13 @@
 // ⓒ Copyright IBM Corp. 2017
 
-// import org.apache.spark.SparkContext
-// import org.apache.spark.SparkContext._
-// import org.apache.spark.SparkConf
-// import org.apache.hadoop.conf.Configuration
+import org.apache.spark.SparkContext
+import org.apache.spark.SparkContext._
+import org.apache.spark.SparkConf
+import org.apache.hadoop.conf.Configuration
 
-// import org.apache.hadoop.io.LongWritable
-// import org.apache.hadoop.io.Text
-// import org.apache.hadoop.mapreduce.lib.input.TextInputFormat
+import org.apache.hadoop.io.LongWritable
+import org.apache.hadoop.io.Text
+import org.apache.hadoop.mapreduce.lib.input.TextInputFormat
 import scala.collection.mutable.ListBuffer
 import scala.util.control.Breaks._
 import scala.collection.mutable.Queue
@@ -44,54 +44,42 @@ object SqueezeBox {
     val kmers = get_pos_kmer_tups(seq,k)
     var rc_kmers = get_pos_kmer_tups(rc_seq,k)
     var res = new ListBuffer[(Int,String)]()
-	
-//	println("----------------- kmers   " + kmers)
-	
-	   // AACCTTGCTACGTCCAAG
-	   //   012345678901234567
+    
+     // AACCTTGCTACGTCCAAG
+     //   012345678901234567
 
     // change order, indices of rc_kmers to match kmers
-    rc_kmers = rc_kmers.reverse.map(pos_kmer_tup => (rc_kmers.length - pos_kmer_tup._1 -1,pos_kmer_tup._2))
-	
-//	println("----------------- rc_kmers   " + rc_kmers) 
-	
-	var prev : Int = -1
+    rc_kmers = rc_kmers.reverse.map(pos_kmer_tup => (rc_kmers.length - pos_kmer_tup._1 -1,pos_kmer_tup._2)) 
+    
+    var prev : Int = -1
     for (i <- 0 until kmers.length){
-	  breakable {
-		  val forward_min = get_minimizer_w_pos(kmers(i), l)
-		  val rc_min  = get_minimizer_w_pos(rc_kmers(i), l)
-		  // check there are enough bases to append at each end
-		  val real_min: (Int,String) = List(forward_min, rc_min).minBy(_._2) //(Ordering.by{tup: (Int,String) => tup._2})
-		  val padding_length: Int = (k-l)/2 // NB: choose l and k to be odd --> padding remains whole number
-		  
-		  val real_start_pos: Int = 
-			if (real_min == forward_min) 
-				real_min._1 + i
-			else
-				i + k - l - real_min._1
-				
-//		 println("-----------------" + real_min + " , " + prev)
-		 
-		   if (real_start_pos == prev) { break }
-		   else { prev = real_start_pos }
-		  
-//		  println("-----------------" + real_min + " , " + prev)
-		  if (real_start_pos - padding_length >= 0 && real_start_pos + padding_length + l -1 <= seq.length-1){
-			// return the minimizer after padding it using either the forward of reverse sequence
-			val min_tup: (Int, String) =  
-			if (real_min == forward_min) 
-			(real_start_pos - padding_length, 
-			 seq.substring(real_start_pos - padding_length, real_start_pos + padding_length + l))
-			else
-			// (rc_seq.length - (real_start_pos + l - 1 + padding_length) - 1, 
-      // rc_seq.substring(rc_seq.length - (real_start_pos + l - 1 + padding_length) -1, 
-      //   rc_seq.length - (real_start_pos - padding_length)))
-      (real_start_pos + l + padding_length - k, 
-			  seq.substring(real_start_pos + l + padding_length - k, real_start_pos + l + padding_length))
-			res += min_tup
-		//	println("-----------------" + "," + i + "," + real_min +"," + padding_length +"," + real_start_pos +"," + min_tup)
-		  } 
-		}
+      breakable {
+        val forward_min = get_minimizer_w_pos(kmers(i), l)
+        val rc_min  = get_minimizer_w_pos(rc_kmers(i), l)
+        // check there are enough bases to append at each end
+        val real_min: (Int,String) = List(forward_min, rc_min).minBy(_._2) 
+        val padding_length: Int = (k-l)/2 // NB: choose l and k to be odd --> padding remains whole number
+        
+        val real_start_pos: Int = 
+        if (real_min == forward_min) 
+          real_min._1 + i
+        else
+          i + k - l - real_min._1
+               
+        if (real_start_pos == prev) { break }
+        else { prev = real_start_pos }
+        
+        if (real_start_pos - padding_length >= 0 && real_start_pos + padding_length + l -1 <= seq.length-1){
+        val min_tup: (Int, String) =  
+        if (real_min == forward_min) 
+        (real_start_pos - padding_length, 
+         seq.substring(real_start_pos - padding_length, real_start_pos + padding_length + l))
+        else
+        (real_start_pos + l + padding_length - k, 
+          seq.substring(real_start_pos + l + padding_length - k, real_start_pos + l + padding_length))
+        res += min_tup
+        } 
+      }
     }
     res
   }
@@ -113,10 +101,13 @@ object SqueezeBox {
           left_rep = List(edge_rep.substring(0,k), rc(edge_rep.substring(0,k))).min
           right_rep = List(edge_rep.substring(edge_rep.length - k, edge_rep.length), 
           rc(edge_rep.substring(edge_rep.length - k, edge_rep.length))).min
+          olp_length = anchors_array(i)._1 - anchors_array(i+1)._1 + k
+          olp_val = if (olp_length >= 0) olp_length else read.substring(anchors_array(i)._1 + k, anchors_array(i+1)._1) 
           edge_tup = 
               (left_rep, right_rep,
                (edge_rep.substring(0,k) == left_rep,
-               edge_rep.substring(edge_rep.length - k,edge_rep.length) == right_rep)
+               edge_rep.substring(edge_rep.length - k,edge_rep.length) == right_rep,
+               olp_val)
               )
 
       } yield edge_tup
@@ -132,8 +123,13 @@ object SqueezeBox {
         e.g., [0,1,0,0] if the (k+1)th character is a C
     """
     */
-    var allKmers = getKmers(read, k+1)
-    val filtered_kmers = allKmers.filter(x => !x.contains("N") && !x.contains("n"))
+    var allKmers = getKmers(read, k+1) // kpomers
+    var rc_kmers = getKmers(rc(read), k+1)
+    val fltrd_kmers = allKmers.filter(x => !x.contains("N") && !x.contains("n"))
+    val filtered_rc_kmers = rc_kmers.filter(x => !x.contains("N") && !x.contains("n"))
+    val filtered_kmers =  fltrd_kmers ++ filtered_rc_kmers
+
+    // returned value includes a 1 count for each extension in both the forward and RC directions
     val last_char_value_arrays = filtered_kmers
     .map{kpomer => (kpomer.substring(0,kpomer.length-1), kpomer(kpomer.length-1))} // k.p.o. = "k plus one"
     .map{kmer_parts => 
@@ -142,6 +138,7 @@ object SqueezeBox {
       (kmer_parts._1, char_counts)}
     last_char_value_arrays
   }
+
   def filterTup(x: Array[Int]) : Boolean = {
     var cnt = 0
     // for (element <- x._2) {
@@ -158,12 +155,12 @@ object SqueezeBox {
     // else return false
   }
 
-  def map_read_to_anchors_list(seq: String, k: Int, l: Int, juncs_set:Set[String]){		
-  	val mins_lst = get_stranded_kmerized_minimizers_list(seq,k,l)
-  	val allKmers = get_pos_kmer_tups(seq,k)
-  	val read_anchors = List[(Int,String)]()
-  	
-  	allKmers.filter(kmerT => juncs_set.contains(kmerT._2) || juncs_set.contains(rc(kmerT._2)) || mins_lst.contains(kmerT)).sorted
+  def map_read_to_anchors_list(seq: String, k: Int, l: Int, juncs_set:Set[String]){   
+    val mins_lst = get_stranded_kmerized_minimizers_list(seq,k,l)
+    val allKmers = get_pos_kmer_tups(seq,k)
+    val read_anchors = List[(Int,String)]()
+    
+    allKmers.filter(kmerT => juncs_set.contains(kmerT._2) || juncs_set.contains(rc(kmerT._2)) || mins_lst.contains(kmerT)).sorted
   }
 
   def run_tests(){
@@ -199,7 +196,22 @@ object SqueezeBox {
     l = 3; k = 5
     println("---------" + get_edge_list(read1,a1,k,l))  
 
+    /////////////////////////////////////////
+    // test getting junctions out of reads
 
+    // 5 read sequences, including 1 F junction and one R junction __\__/__
+    l = 11; k = 31
+    val read4 = "GCAGCTGCTCGGCCCCGACGAATCGATCGACGCGTGTGGCTATTTCCGCGGTAGCCTGCCTGGCACACCGAGTCTCGGCGCAGCGGTTCGCGCACGAGCGT" // C->G at 62d character
+    val read5 = "GCAGCTGCTCGGCCCCGACGAATCGATCGACGCGTGTGGCTATTTCCGCGGTAGCCTGCCTCGCACACCGAGTCTCGGCGCAGCGGTTCGCGCACGAGCGT"
+    val read6 = "GCAGCTGCTCGGCCCCGACGAATCGATCGACGCGTGTGGCTATTTCCGCGGTAGCCTGCCTCGCACACCGAGTCTCGGCGCAGCGGTTCGCGCACGAGCGT"
+    val read7 = "CCCCCCCCCCCCCCCCGACGAAAAAAAAAAAGCGTGTGACTATTTCCGCGGTAGCCTGCCTCGCACACCGAGTCTCGGCGCAGCGGTTCGCGCACGAGCGT" // totally different start, G->A at 39th character
+    val read8 = "GCAGCTGCTCGGCCCCGACGAATCGATCGACGCGTGTGGCTATTTCCGCGGTAGCCTGCCTCGCACACCGAGTCTCGGCGCAGCGGTTCGCGCACGAGCGT"
+    // println("---------" + get_stranded_kmerized_minimizers_list(read1, k, l))  
+    val reads = sc.parallelize(Vector(read4, read5, read6, read7, read8))
+    val kmers = reads.flatMap(read=> getKmerToNextCharCounts(read, k)).reduceByKey((a,b) => (a,b).zipped.map(_ + _)) // element-wise sum
+    val junctions = kmers.filter(tuple => filterTup(tuple._2)._2)
+    
+ 
   }
 
 
